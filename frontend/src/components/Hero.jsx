@@ -28,8 +28,8 @@ export default function Hero() {
           </div>
 
           <h1 className="text-[28px] sm:text-[36px] xl:text-[48px] font-black leading-[1.1] text-[#1A202C] tracking-tight">
-            Skincare Detection and <br />
-            <span className="bg-gradient-to-r from-teal-500 to-emerald-400 bg-clip-text text-transparent">Treatment System</span>
+            Skin Disease Detection and <br />
+            <span className="bg-gradient-to-r from-teal-500 to-emerald-400 bg-clip-text text-transparent">Routine Recommendation System</span>
           </h1>
 
           <p className="text-[13px] sm:text-sm xl:text-base text-gray-500 mt-3 xl:mt-4 max-w-lg font-medium leading-relaxed pr-2">

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GlowAi Architecture Flowchart</title>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            background-color: #f9f9f9;
+        }
+        .mermaid {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 1200px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="mermaid">
+flowchart TD
+    %% User Interaction
+    User([User]) --> Auth[Registration & Login]
+    Auth --> Dashboard{User Dashboard}
+    
+    %% Dashboard Features
+    Dashboard -->|1. Upload Image| QuickScan[Quick Scan Feature]
+    Dashboard -->|2. Check Steps| Routine[Routine Tracking]
+    Dashboard -->|3. Ask Questions| Chat[AI Chat Assistant]
+    
+    %% Backend Processing
+    QuickScan -->|Secure Image Transfer| Backend[Node.js / Flask Backend]
+    
+    %% AI Processing Pipeline
+    subgraph AI_Engine [Python AI Model Engine]
+        Backend --> ML_Check{Is Day 1 Anchor Scan?}
+        
+        %% Day 1 Scan
+        ML_Check -->|Yes| D1[Identify Primary Disease]
+        D1 --> ApplyParams[Apply Disease-Specific Parameters]
+        
+        %% Follow Up Scan
+        ML_Check -->|No| FollowUp[Extract Embeddings & Histograms]
+        FollowUp --> IdentityCheck{Identity Match\n> Threshold?}
+        
+        IdentityCheck -->|Fail| Reject[Reject Scan: Identity Mismatch]
+        IdentityCheck -->|Pass| CNN[CNN Classification]
+        
+        CNN --> HealingSplit[50/50 Healing Split Logic]
+        HealingSplit --> Thresholding[Smart Disease Thresholding]
+        Thresholding --> ApplyParams
+        
+        ApplyParams --> ScoreCalc[Calculate 'Closeness to Normal']
+        ScoreCalc --> MapScore[Map to 40%-100% Baseline]
+    end
+    
+    Reject -.-> Dashboard
+    
+    %% Database and LLM
+    MapScore -->|Save Results| DB[(Database: SQLite / MongoDB)]
+    
+    DB -->|Trigger Generation| GenAI[Groq LLM API]
+    GenAI -->|Personalized AM/PM Plan| Routine
+    
+    Chat -->|Dermatology Q&A| GenAI
+    
+    Routine -.->|Updates| Dashboard
+    </div>
+</body>
+</html>

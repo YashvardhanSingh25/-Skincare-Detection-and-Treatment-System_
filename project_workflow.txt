@@ -1,0 +1,63 @@
+# Skincare-AI: Project Workflow & Implementation Details
+
+This document outlines the complete system architecture, data flow, and core implementations of the Skincare-AI platform.
+
+## 1. System Architecture
+The project is built on a 3-tier architecture:
+*   **Frontend**: React (Vite) + Tailwind CSS + Framer Motion. Runs on port 5173.
+*   **Node.js Backend**: Express.js server handling routing, user sessions, and SQLite database interactions. Runs on port 5000.
+*   **Python AI Backend**: Flask server running on port 5001, dedicated to machine learning models, image processing, deepface verification, and Gemini LLM interactions.
+
+---
+
+## 2. Core Workflows
+
+### A. Initial Skin Scan (Day 1 Baseline)
+1. **Capture**: User navigates to the `/scan` page. They take 3 photos (Left, Middle, Right) for a comprehensive face analysis, or 1 photo for a specific body part.
+2. **Processing (`/api/predict`)**: Images are sent to the Python server.
+    *   **Skin Classification**: A customized MobileNetV2 model predicts the skin condition (e.g., Acne, Normal, Redness, etc.) and skin type.
+    *   **Baseline Storage**: The features and images of Day 1 are saved. These become the absolute baseline for tracking progress.
+3. **Routine Generation**: The Python server sends the analysis results to the Google Gemini AI to generate a highly personalized, 30-day morning and night skincare routine.
+4. **Database Entry**: The Node.js server receives the analysis and the routine, storing them in the SQLite `daily_scans` table as Day 1.
+
+### B. Daily Progress Tracker (Quick Scan)
+1. **Capture**: Users return on subsequent days and go to `/quick-scan`.
+2. **Analysis (`/api/quick_predict`)**: 
+    *   **Progress Calculation**: The MobileNetV2 model analyzes the new images. The system compares the new prediction vector against the Day 1 baseline prediction vector.
+    *   **Health Metrics**: It calculates two major metrics:
+        *   **Health Score / Improvement (%)**: Measures how much the target disease (e.g., Acne) has decreased compared to Day 1.
+        *   **Closeness to Normal (%)**: Measures how closely the current skin matches the profile of a healthy "Normal" skin type.
+3. **Identity Verification (Anti-Cheat Mechanism)**: 
+    *   To ensure the progress tracker cannot be cheated by scanning a different person, the system uses **DeepFace (Facenet model)**.
+    *   The Python server pulls the user's *immediately previous* scanned images from the database (`prev_paths`).
+    *   It calculates the Euclidean distance between the current face and the previous face. The distance is mapped to a similarity percentage.
+    *   If the similarity falls below **50%**, the scan is rejected as an impersonation attempt.
+
+### C. Chatbot & Dynamic Routine Updating
+1. **Interaction**: Users chat with the AI on the `/chat` page or mini-widget.
+2. **Context-Aware Responses**: The Python backend (`/api/chat`) feeds the user's current skin disease, skin type, and current routine to Gemini.
+3. **Routine Extraction**: If the AI suggests modifying the routine, the React frontend strictly parses the AI's markdown response (looking specifically for numbered lists like `1. ` under `**Morning Routine:**` or `**Night Routine:**`).
+4. **Update**: The parsed routine is sent to the Node backend (`/api/schedule` PUT request) to update the SQLite database, reflecting instantly on the Dashboard.
+
+---
+
+## 3. Database Schema (SQLite)
+
+*   **`users`**: Stores `id`, `name`, `email`, `password`.
+*   **`daily_scans`**: Tracks facial progression. Columns include: `id`, `user_id`, `day`, `disease`, `skin_type`, `improvement`, `closeness_to_normal`, `similarity`, `image_paths` (Day 1 baseline), `current_images` (latest scan), and `routine` (JSON of daily tasks).
+*   **`daily_skin_scans`**: Operates identically to `daily_scans` but tracks isolated body parts.
+
+---
+
+## 4. Key Implementation Details
+
+*   **Machine Learning (`load_model.py`)**: 
+    *   Uses TensorFlow/Keras to load a fine-tuned MobileNetV2 `Skin_Analyzer.h5` model. 
+    *   A custom `DISEASE_PARAMS` dictionary defines specific weighting, noise-splitting ratios, and thresholds for different diseases to stabilize tracking accuracy over 30 days.
+*   **Facial Verification (`DeepFace`)**: 
+    *   `enforce_detection=False` is utilized to prevent crashes when the MobileNet model passes tightly cropped skin patches where standard face detectors might fail.
+    *   Thresholds are mathematically calibrated: Facenet distance > 0.40 maps to < 50% similarity, accurately separating genuine users from spoof attempts.
+*   **Frontend Dashboard (`Dashboard.jsx`)**:
+    *   Real-time progress rendering via Recharts (30-day Area Chart).
+    *   Dynamic stats displaying `Total Scans`, `Health Score`, and `Closeness to Normal`.
+    *   Contextual UI updates: Automatically displays a "You are cured!" message when Closeness to Normal exceeds 95% or if the skin transitions to Normal.

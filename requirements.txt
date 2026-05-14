@@ -1,6 +1,4 @@
-# ==========================================
-# GlowAi Project Dependencies
-# ==========================================
+
 
 # 1. PYTHON MODEL DEPENDENCIES
 # Directory: /models

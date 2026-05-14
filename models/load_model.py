@@ -171,10 +171,11 @@ class FastSkinAnalyzer:
         self.embs_norm = tf.nn.l2_normalize(tf.constant(embs, dtype=tf.float32), axis=1)
         print("Initialization complete.")
 
-    def analyze(self, day1_paths, current_paths):
+    def analyze(self, day1_paths, current_paths, prev_paths=None):
         """
-        day1_paths: List of 3 paths [left, middle, right]
+        day1_paths: List of 3 paths [left, middle, right] (Used for baseline health)
         current_paths: List of 3 paths [left, middle, right]
+        prev_paths: List of 3 paths [left, middle, right] (Used for identity verification against the most recent scan)
         """
         # 1. Preprocess all 6 images
         all_paths = day1_paths + current_paths
@@ -217,35 +218,49 @@ class FastSkinAnalyzer:
         boosted_h1 = calc_health(avg_h1)
         boosted_h2 = calc_health(avg_h2)
         
-        # 5. Similarity between corresponding sides (Identity Check using Embeddings)
-        embs_day1_c = embs_day1 - tf.reduce_mean(embs_day1, axis=1, keepdims=True)
-        embs_curr_c = embs_curr - tf.reduce_mean(embs_curr, axis=1, keepdims=True)
-        
-        sim_list = tf.reduce_sum(
-            tf.nn.l2_normalize(embs_day1_c, axis=1) * tf.nn.l2_normalize(embs_curr_c, axis=1), 
-            axis=1
-        ).numpy()
-        avg_sim = float(max(0.0, np.mean(sim_list))) # Clamp negative correlations to 0
-        
-        # Add color histogram similarity for face to make it robust to condition changes
+        # 5. Robust Face Verification using DeepFace (Identity Check)
         try:
-            hist_sims = []
-            for p1, p2 in zip(day1_paths, current_paths):
-                img1 = cv2.imread(p1)
-                img2 = cv2.imread(p2)
-                if img1 is not None and img2 is not None:
-                    hist1 = cv2.calcHist([img1], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
-                    hist2 = cv2.calcHist([img2], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
-                    cv2.normalize(hist1, hist1)
-                    cv2.normalize(hist2, hist2)
-                    hist_sims.append(cv2.compareHist(hist1, hist2, cv2.HISTCMP_CORREL))
-            if hist_sims:
-                avg_hist_sim = max(0.0, float(np.mean(hist_sims)))
-                # Use the disease-specific weight for histogram vs embeddings
-                hw = params["hist_weight"]
-                avg_sim = float((avg_sim * (1.0 - hw)) + (avg_hist_sim * hw))
+            from deepface import DeepFace
+            sim_scores = []
+            
+            # Use prev_paths if provided, otherwise fallback to day1_paths
+            verification_paths = prev_paths if prev_paths else day1_paths
+            
+            for p1, p2 in zip(verification_paths, current_paths):
+                try:
+                    # enforce_detection=False allows processing of tight facial crops
+                    result = DeepFace.verify(
+                        img1_path=p1, 
+                        img2_path=p2, 
+                        model_name="Facenet", 
+                        detector_backend="opencv",
+                        enforce_detection=False,
+                        align=True
+                    )
+                    
+                    dist = result["distance"]
+                    threshold = result["threshold"] # Usually ~0.40 for Facenet
+                    
+                    # Convert distance to a robust similarity percentage [0.0, 1.0]
+                    # The distance range is theoretically 0.0 to 1.414.
+                    # We map distance 0.0 -> 100%, threshold -> 60%, and 1.0+ -> 0%
+                    if dist <= threshold:
+                        sim = 1.0 - (dist / threshold) * 0.40
+                    else:
+                        sim = max(0.0, 0.60 - ((dist - threshold) / (1.0 - threshold)) * 0.60)
+                        
+                    sim_scores.append(sim)
+                except Exception as ex:
+                    print(f"DeepFace error for a pair: {ex}")
+            
+            if sim_scores:
+                avg_sim = float(np.mean(sim_scores))
+            else:
+                avg_sim = 0.0
+                
         except Exception as e:
-            print("Histogram error:", e)
+            print("DeepFace Verification error:", e)
+            avg_sim = 0.0
         
         # 6. Ensemble Prediction for Current
         max_pred_matrix = np.max(preds_curr, axis=0)
@@ -309,13 +324,15 @@ class FastSkinAnalyzer:
         
         return idx, CATEGORIES[idx], conf, preds[0]
 
-    def analyze_body_part(self, day1_path, current_path):
+    def analyze_body_part(self, day1_path, current_path, prev_path=None):
         """
         Analyzes a single region of the body (e.g., hand, arm, leg) from Day 1 to Current.
         Bypasses face detection and 3-view aggregation.
         Returns prediction, health scores, and similarity for the given body part.
         """
         # 1. Preprocess the 2 images with is_face=False
+        verification_path = prev_path if prev_path else day1_path
+        
         imgs = [
             preprocess_image(day1_path, is_face=False), 
             preprocess_image(current_path, is_face=False)
@@ -360,7 +377,7 @@ class FastSkinAnalyzer:
         
         # Add color histogram similarity for skin since deep features are too generic
         try:
-            img1 = cv2.imread(day1_path)
+            img1 = cv2.imread(verification_path)
             img2 = cv2.imread(current_path)
             if img1 is not None and img2 is not None:
                 hist1 = cv2.calcHist([img1], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])

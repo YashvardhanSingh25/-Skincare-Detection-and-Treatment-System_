@@ -157,6 +157,13 @@ const Dashboard = () => {
             <h1 className="text-3xl font-bold text-gray-900 capitalize">Welcome back, {localStorage.getItem("userName") || "Guest"}!</h1>
             <p className="text-gray-500 mt-1">Here's your skin health overview for today.</p>
           </div>
+          <button
+            onClick={() => window.location.href = '/quick-scan'}
+            className="px-6 py-3 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 transition-all flex items-center gap-2 shadow-lg shadow-teal-600/20"
+          >
+            <Activity size={20} />
+            Quick Scan & Similarity Search
+          </button>
         </motion.div>
 
         {/* Stats Grid */}

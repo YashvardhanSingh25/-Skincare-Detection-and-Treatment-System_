@@ -100,7 +100,7 @@ const PersonalizedRoutines = () => {
   const stats = [
     { label: 'Total Scans', value: progressMetrics?.scan_count || 0, icon: Activity, color: 'text-blue-500 bg-blue-50' },
     { label: 'Avg. Improvement', value: progressMetrics ? `+${progressMetrics.improvement.toFixed(1)}%` : '0%', sub: progressMetrics ? `Closeness: ${progressMetrics.closeness_to_normal.toFixed(1)}%` : '', icon: CheckCircle2, color: 'text-green-500 bg-green-50' },
-    { label: 'Similarity Search', value: 'View Details', icon: Sparkles, color: 'text-purple-500 bg-purple-50', isAction: true },
+    { label: 'Health Score', value: progressMetrics ? `${progressMetrics.health_score.toFixed(1)}%` : '0%', icon: Sparkles, color: 'text-purple-500 bg-purple-50' },
     { label: 'Select Day', isDropdown: true, icon: Calendar, color: 'text-orange-500 bg-orange-50' },
   ];
 
@@ -137,7 +137,7 @@ const PersonalizedRoutines = () => {
               className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8"
             >
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 capitalize">Welcome back, {localStorage.getItem("userName") || "Guest"}! 👋</h1>
+                <h1 className="text-3xl font-bold text-gray-900 capitalize">Welcome back, {localStorage.getItem("userName") || "Guest"}!</h1>
                 <p className="text-gray-500 mt-1">Here's your skin health overview for today.</p>
               </div>
               <button

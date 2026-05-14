@@ -1,3 +1,4 @@
+
 import os
 os.environ['TF_USE_LEGACY_KERAS'] = '1'
 from flask import Flask, request, jsonify
@@ -119,7 +120,16 @@ def predict():
 
         # Analyze
         if mode == "face":
-            analysis = analyzer.analyze(day1_paths, saved_paths)
+            # Fetch previous scan's images for the anti-cheat similarity check
+            prev_paths = day1_paths
+            if meta and 'current_images' in meta.keys() and meta['current_images'] and meta['current_images'] != '[]':
+                try:
+                    prev_paths = json.loads(meta['current_images'])
+                    if len(prev_paths) != len(saved_paths):
+                        prev_paths = day1_paths
+                except:
+                    pass
+            analysis = analyzer.analyze(day1_paths, saved_paths, prev_paths=prev_paths)
             detected_issue = analysis["class_name"]
             confidence = round(float(analysis["confidence"]) * 100, 2)
             improvement = analysis["improvement"]
@@ -127,7 +137,14 @@ def predict():
             closeness = analysis.get("closeness_to_normal", overall_health)
             similarity = float(analysis.get("similarity", 0))
         else:
-            analysis = analyzer.analyze_body_part(day1_paths[0], saved_paths[0])
+            prev_path = day1_paths[0]
+            if meta and 'skin_current_images' in meta.keys() and meta['skin_current_images'] and meta['skin_current_images'] != '[]':
+                try:
+                    p = json.loads(meta['skin_current_images'])
+                    if len(p) > 0: prev_path = p[0]
+                except:
+                    pass
+            analysis = analyzer.analyze_body_part(day1_paths[0], saved_paths[0], prev_path=prev_path)
             detected_issue = analysis["class_name"]
             confidence = round(float(analysis["confidence"]) * 100, 2)
             improvement = analysis["improvement"]
@@ -142,13 +159,13 @@ def predict():
         else:
             is_first_scan = (meta is None or not meta['skin_day1_images'] or meta['skin_day1_images'] == '[]')
 
-        # The model's embeddings are highly sensitive to skin conditions. 
-        # Clearing up massive acne will radically change the deep features, causing similarity drops.
-        # Lowered threshold to 0.15 to prevent false rejections of the same person.
-        if not is_first_scan and similarity < 0.15:
+        # DeepFace verification is highly robust to skin conditions. 
+        # A similarity below 0.50 (50%) indicates a different person with high confidence.
+        # This accurately rejects impersonation attempts while allowing genuine users to pass.
+        if not is_first_scan and similarity < 0.50:
             return jsonify({
                 "success": False, 
-                "message": f"Similarity check failed ({round(similarity*100,2)}%). The scanned person does not match the original user."
+                "message": f"Identity verification failed (Similarity: {round(similarity*100,2)}%). The scanned person does not match the previous scan history."
             }), 400
 
         if detected_issue == 'normal':

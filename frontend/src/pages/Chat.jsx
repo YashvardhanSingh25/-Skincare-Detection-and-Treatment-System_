@@ -130,8 +130,9 @@ const Chat = () => {
     const extractSteps = (section) => {
       if (!section) return [];
       return section.split('\n')
-        .map(line => line.replace(/^\d+\.\s*/, '').trim())
-        .filter(line => line.length > 0 && !line.includes('**'));
+        .map(line => line.trim())
+        .filter(line => /^\d+\.\s/.test(line))
+        .map(line => line.replace(/^\d+\.\s*/, '').trim());
     };
 
     return {
